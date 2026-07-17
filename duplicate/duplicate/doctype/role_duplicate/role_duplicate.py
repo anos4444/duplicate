@@ -72,7 +72,16 @@ class RoleDuplicate(Document):
 		print(f"DEBUG: Processed into {len(perm_dict)} unique DocTypes")
 
 		# Add permissions to child table
+		# Skip orphaned DocPerm rows pointing at doctypes not present on this site
+		# (e.g. uninstalled apps or doctypes removed in newer Frappe versions)
+		existing_doctypes = {
+			d.name for d in frappe.get_all("DocType", filters={"name": ("in", list(perm_dict))})
+		}
+		skipped = [dt for dt in perm_dict if dt not in existing_doctypes]
+
 		for doctype, perm_data in perm_dict.items():
+			if doctype not in existing_doctypes:
+				continue
 			self.append("role_permissions", {
 				"document_type": doctype,
 				"read": perm_data.get("read", 0),
@@ -91,9 +100,14 @@ class RoleDuplicate(Document):
 				"if_owner": perm_data.get("if_owner", 0),
 			})
 
-		frappe.msgprint(_("Loaded {0} permissions from role '{1}'").format(
-			len(perm_dict), self.source_role
-		))
+		msg = _("Loaded {0} permissions from role '{1}'").format(
+			len(existing_doctypes), self.source_role
+		)
+		if skipped:
+			msg += "<br>" + _("Skipped {0} doctypes not found on this site: {1}").format(
+				len(skipped), ", ".join(skipped[:10]) + ("..." if len(skipped) > 10 else "")
+			)
+		frappe.msgprint(msg)
 
 	def create_new_role(self):
 		"""Create new role with permissions using proper Frappe methods"""

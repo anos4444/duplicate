@@ -80,8 +80,14 @@ def copy_role_permissions(source_role, target_role):
 		fields=["*"]
 	)
 	
+	# Skip orphaned permissions pointing at doctypes not present on this site
+	all_parents = {p["parent"] for p in doctype_permissions}
+	existing = {d.name for d in frappe.get_all("DocType", filters={"name": ("in", list(all_parents))})} if all_parents else set()
+
 	# Copy DocType permissions
 	for perm in doctype_permissions:
+		if perm.get("parent") not in existing:
+			continue
 		new_perm = frappe.new_doc("DocPerm")
 		
 		# Copy all fields except name and role
@@ -106,7 +112,12 @@ def copy_role_permissions(source_role, target_role):
 		fields=["*"]
 	)
 	
+	custom_parents = {p["parent"] for p in custom_permissions}
+	existing_custom = {d.name for d in frappe.get_all("DocType", filters={"name": ("in", list(custom_parents))})} if custom_parents else set()
+
 	for perm in custom_permissions:
+		if perm.get("parent") not in existing_custom:
+			continue
 		new_perm = frappe.new_doc("Custom DocPerm")
 		
 		fields_to_copy = [
